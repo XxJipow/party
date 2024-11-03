@@ -1,0 +1,364 @@
+<html><head><meta charset="utf-8" /><link rel="icon" href="pfp.png" type="image/x-icon"><title>$party</title><style>
+body { margin: 0; }
+canvas { width: 100%; height: 100% }
+.controls {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    background: rgba(0,0,0,0.7);
+    color: white;
+    padding: 15px;
+    border-radius: 5px;
+    font-family: Arial, sans-serif;
+}
+.dance-controls {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: rgba(0,0,0,0.7);
+    color: white;
+    padding: 15px;
+    border-radius: 5px;
+    font-family: Arial, sans-serif;
+}
+.dance-button {
+    display: block;
+    width: 100%;
+    margin: 5px 0;
+    padding: 10px;
+    background: #444;
+    border: none;
+    color: white;
+    border-radius: 3px;
+    cursor: pointer;
+}
+.dance-button:hover {
+    background: #555;
+}
+.rainbow-control {
+    margin-top: 20px;
+}
+</style></head><body>
+<div class="controls">
+    <h3>Controls:</h3>
+    <p>WASD - Move Camera</p>
+    <p>Space - Move Up</p>
+    <p>Left Ctrl - Move Down</p>
+    <p>1 - Idle Animation</p>
+    <p>2 - Run Animation</p>
+    <p>3 - Death Animation</p>
+    <div class="rainbow-control">
+        <label>
+            <input type="checkbox" id="rainbowMode"> Rainbow Mode
+        </label>
+    </div>
+    <p></p>CA:
+</div>
+
+<div class="dance-controls">
+    <h3>Dance Moves:</h3>
+    <button class="dance-button" id="dance1">Twist Dance</button>
+    <button class="dance-button" id="dance2">Careless Dance</button>
+    <button class="dance-button" id="dance3">Breakdance</button>
+    <button class="dance-button" id="dance4">Twerk</button>
+</div>
+
+<audio id="danceMusic" loop>
+    <source src="https://file.garden/ZtKFbTlmmU50iOV4/Shimmy%20Shimmy%20Ya%20Meme.mp3" type="audio/mp3">
+</audio>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/FBXLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/libs/fflate.min.js"></script>
+<script>
+// Scene setup
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+const renderer = new THREE.WebGLRenderer();
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+
+// Create room
+const roomGeometry = new THREE.BoxGeometry(10, 8, 10);
+const roomMaterial = new THREE.MeshPhongMaterial({ 
+    color: 0x808080,
+    side: THREE.BackSide
+});
+const room = new THREE.Mesh(roomGeometry, roomMaterial);
+room.position.y = 4;
+scene.add(room);
+
+// Lighting
+const spotLight = new THREE.SpotLight(0xffffff, 1);
+spotLight.position.set(0, 7, 0);
+spotLight.angle = Math.PI / 4;
+spotLight.penumbra = 0.1;
+spotLight.decay = 2;
+spotLight.distance = 20;
+spotLight.target.position.set(0, 0, 0);
+scene.add(spotLight);
+scene.add(spotLight.target);
+
+scene.add(new THREE.AmbientLight(0x404040));
+
+// Camera position
+camera.position.set(0, 2, 5);
+camera.lookAt(0, 1, 0);
+
+let mixer;
+let character;
+let currentAnimation;
+let idleAnimation;
+let runAnimation;
+let danceAnimation;
+let dance2Animation;
+let dance3Animation;
+let dance4Animation;
+let deathAnimation;  // Added death animation variable
+
+// Camera movement variables
+const moveSpeed = 0.15;
+const keys = {
+    w: false,
+    a: false,
+    s: false,
+    d: false,
+    space: false,
+    ctrl: false
+};
+
+// Key listeners
+document.addEventListener('keydown', (event) => {
+    switch(event.key.toLowerCase()) {
+        case 'w': keys.w = true; break;
+        case 'a': keys.a = true; break;
+        case 's': keys.s = true; break;
+        case 'd': keys.d = true; break;
+        case ' ': keys.space = true; break;
+        case 'control': keys.ctrl = true; break;
+        case '1': 
+            if (idleAnimation && currentAnimation !== idleAnimation) {
+                currentAnimation.fadeOut(0.5);
+                idleAnimation.reset().fadeIn(0.5).play();
+                currentAnimation = idleAnimation;
+                document.getElementById('danceMusic').pause();
+            }
+            break;
+        case '2':
+            if (runAnimation && currentAnimation !== runAnimation) {
+                currentAnimation.fadeOut(0.5);
+                runAnimation.reset().fadeIn(0.5).play();
+                currentAnimation = runAnimation;
+                document.getElementById('danceMusic').pause();
+            }
+            break;
+        case '3':
+            if (deathAnimation) {  // Handle death animation
+                currentAnimation.fadeOut(0.5);
+                deathAnimation.reset().fadeIn(0.5).play();
+                currentAnimation = deathAnimation;
+                document.getElementById('danceMusic').pause();
+            }
+            break;
+    }
+});
+
+document.addEventListener('keyup', (event) => {
+    switch(event.key.toLowerCase()) {
+        case 'w': keys.w = false; break;
+        case 'a': keys.a = false; break;
+        case 's': keys.s = false; break;
+        case 'd': keys.d = false; break;
+        case ' ': keys.space = false; break;
+        case 'control': keys.ctrl = false; break;
+    }
+});
+
+// Load character and animation
+const loader = new THREE.FBXLoader();
+
+// Load character model
+loader.load('https://file.garden/ZtKFbTlmmU50iOV4/player/RIgged%20Character.fbx', (fbx) => {
+    character = fbx;
+    character.scale.setScalar(0.005);
+    scene.add(character);
+
+    // Store original materials
+    character.traverse((child) => {
+        if (child.isMesh) {
+            child.originalMaterial = child.material.clone();
+        }
+    });
+
+    // Create animation mixer
+    mixer = new THREE.AnimationMixer(character);
+
+    // Load idle animation
+    loader.load('https://file.garden/ZtKFbTlmmU50iOV4/player/Warrior%20Idle.fbx', (anim) => {
+        idleAnimation = mixer.clipAction(anim.animations[0]);
+        currentAnimation = idleAnimation;
+        idleAnimation.play();
+    });
+
+    // Load run animation
+    loader.load('https://file.garden/ZtKFbTlmmU50iOV4/player/Standard%20Run.fbx', (anim) => {
+        runAnimation = mixer.clipAction(anim.animations[0]);
+    });
+
+    // Load dance animations
+    loader.load('https://file.garden/ZtKFbTlmmU50iOV4/player/Twist%20Dance.fbx', (anim) => {
+        danceAnimation = mixer.clipAction(anim.animations[0]);
+    });
+
+    loader.load('https://file.garden/ZtKFbTlmmU50iOV4/player/extra%20dances/Careless%20Dance.fbx', (anim) => {
+        dance2Animation = mixer.clipAction(anim.animations[0]);
+    });
+
+    loader.load('https://file.garden/ZtKFbTlmmU50iOV4/player/extra%20dances/Breakdance.fbx', (anim) => {
+        dance3Animation = mixer.clipAction(anim.animations[0]);
+    });
+    
+    loader.load('https://file.garden/ZtKFbTlmmU50iOV4/player/extra%20dances/Twerk.fbx', (anim) => {
+        dance4Animation = mixer.clipAction(anim.animations[0]);
+    });
+
+    // Load death animation
+    loader.load('https://file.garden/ZtKFbTlmmU50iOV4/player/Death.fbx', (anim) => {
+        deathAnimation = mixer.clipAction(anim.animations[0]);
+        deathAnimation.loop = THREE.LoopOnce;
+        deathAnimation.clampWhenFinished = true;
+    });
+});
+
+// Update camera position based on keys
+function updateCamera() {
+    const forward = new THREE.Vector3(0, 0, -1);
+    const right = new THREE.Vector3(1, 0, 0);
+    
+    forward.applyQuaternion(camera.quaternion);
+    right.applyQuaternion(camera.quaternion);
+
+    forward.y = 0;
+    right.y = 0;
+    forward.normalize();
+    right.normalize();
+
+    let newPosition = camera.position.clone();
+
+    if (keys.w) newPosition.add(forward.multiplyScalar(moveSpeed));
+    if (keys.s) newPosition.sub(forward.multiplyScalar(moveSpeed));
+    if (keys.a) newPosition.sub(right.multiplyScalar(moveSpeed));
+    if (keys.d) newPosition.add(right.multiplyScalar(moveSpeed));
+    if (keys.space) newPosition.y += moveSpeed;
+    if (keys.ctrl) newPosition.y -= moveSpeed;
+
+    // Constrain camera position within the room
+    newPosition.x = Math.max(-4, Math.min(4, newPosition.x));
+    newPosition.y = Math.max(1, Math.min(7, newPosition.y));
+    newPosition.z = Math.max(-4, Math.min(4, newPosition.z));
+
+    camera.position.copy(newPosition);
+    camera.lookAt(0, 1, 0);
+}
+
+// Animation loop
+const clock = new THREE.Clock();
+
+function animate() {
+    requestAnimationFrame(animate);
+
+    updateCamera();
+
+    if (mixer) {
+        mixer.update(clock.getDelta());
+    }
+
+    renderer.render(scene, camera);
+}
+
+animate();
+
+// Handle window resize
+window.addEventListener('resize', onWindowResize, false);
+
+function onWindowResize() {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+let rainbowInterval;
+
+document.getElementById('rainbowMode').addEventListener('change', function(e) {
+    if (e.target.checked) {
+        // Start rainbow mode
+        rainbowInterval = setInterval(() => {
+            if (character) {
+                const randomColor = new THREE.Color(Math.random(), Math.random(), Math.random());
+                // Change character color
+                character.traverse((child) => {
+                    if (child.isMesh) {
+                        if (!child.originalMaterial) {
+                            child.originalMaterial = child.material.clone();
+                        }
+                        child.material.color.copy(randomColor);
+                    }
+                });
+                // Change spotlight color and intensity
+                spotLight.color.copy(randomColor);
+                spotLight.intensity = 0.5 + Math.random() * 1.5; // Random intensity between 0.5 and 2
+            }
+        }, 10); // 0.01 seconds
+    } else {
+        // Stop rainbow mode and restore original materials
+        clearInterval(rainbowInterval);
+        if (character) {
+            character.traverse((child) => {
+                if (child.isMesh && child.originalMaterial) {
+                    child.material = child.originalMaterial.clone();
+                }
+            });
+            // Restore original spotlight settings
+            spotLight.color.setHex(0xffffff);
+            spotLight.intensity = 1;
+        }
+    }
+});
+
+// Dance button event listeners
+document.getElementById('dance1').addEventListener('click', () => {
+    if (danceAnimation && currentAnimation !== danceAnimation) {
+        currentAnimation.fadeOut(0.5);
+        danceAnimation.reset().fadeIn(0.5).play();
+        currentAnimation = danceAnimation;
+        document.getElementById('danceMusic').play();
+    }
+});
+
+document.getElementById('dance2').addEventListener('click', () => {
+    if (dance2Animation && currentAnimation !== dance2Animation) {
+        currentAnimation.fadeOut(0.5);
+        dance2Animation.reset().fadeIn(0.5).play();
+        currentAnimation = dance2Animation;
+        document.getElementById('danceMusic').play();
+    }
+});
+
+document.getElementById('dance3').addEventListener('click', () => {
+    if (dance3Animation && currentAnimation !== dance3Animation) {
+        currentAnimation.fadeOut(0.5);
+        dance3Animation.reset().fadeIn(0.5).play();
+        currentAnimation = dance3Animation;
+        document.getElementById('danceMusic').play();
+    }
+});
+
+document.getElementById('dance4').addEventListener('click', () => {
+    if (dance4Animation && currentAnimation !== dance4Animation) {
+        currentAnimation.fadeOut(0.5);
+        dance4Animation.reset().fadeIn(0.5).play();
+        currentAnimation = dance4Animation;
+        document.getElementById('danceMusic').play();
+    }
+});
+</script></body></html>
